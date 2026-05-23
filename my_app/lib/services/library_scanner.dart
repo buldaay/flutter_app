@@ -1,10 +1,10 @@
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
 
 import '../models/media_category.dart';
 import '../models/media_item.dart';
+import 'thumbnail_service.dart';
 
 class LibraryScanner {
   static const supportedExtensions = ['.mp4', '.mkv', '.avi', '.mov'];
@@ -110,13 +110,7 @@ class LibraryScanner {
     }
 
     try {
-      return await VideoThumbnail.thumbnailFile(
-        video: videoFile.path,
-        thumbnailPath: cachePath,
-        imageFormat: ImageFormat.JPEG,
-        quality: 75,
-        maxHeight: 360,
-      );
+      return await ThumbnailService.generateThumbnail(videoFile.path);
     } catch (_) {
       return null;
     }

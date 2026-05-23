@@ -8,6 +8,9 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import android.media.MediaMetadataRetriever
+import android.graphics.Bitmap
+import java.io.FileOutputStream
 
 class MainActivity : FlutterActivity() {
   private val channelName = "tv_media_launcher"
@@ -20,6 +23,10 @@ class MainActivity : FlutterActivity() {
         "openVideoWithVlc" -> {
           val path = call.argument<String>("path")
           result.success(openVideoWithVlc(path))
+        }
+        "generateThumbnail" -> {
+          val path = call.argument<String>("path")
+          result.success(generateThumbnail(path))
         }
         else -> result.notImplemented()
       }
@@ -56,6 +63,30 @@ class MainActivity : FlutterActivity() {
       true
     } catch (exception: Exception) {
       false
+    }
+  }
+
+  private fun generateThumbnail(path: String?): String? {
+    if (path.isNullOrEmpty()) return null
+    val file = File(path)
+    if (!file.exists()) return null
+
+    return try {
+      val retriever = MediaMetadataRetriever()
+      retriever.setDataSource(file.absolutePath)
+      val bitmap: Bitmap? = retriever.frameAtTime
+      retriever.release()
+      if (bitmap == null) {
+        return null
+      }
+
+      val cacheFile = File(cacheDir, "thumb_${file.nameWithoutExtension}.jpg")
+      FileOutputStream(cacheFile).use { output ->
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 75, output)
+      }
+      cacheFile.absolutePath
+    } catch (exception: Exception) {
+      null
     }
   }
 }
