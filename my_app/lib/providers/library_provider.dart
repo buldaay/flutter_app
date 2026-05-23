@@ -54,7 +54,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> chooseFolder() async {
-    final result = await FilePicker.platform.getDirectoryPath();
+    final result = await FilePicker.getDirectoryPath();
     if (result != null && result.isNotEmpty) {
       mainFolderPath = result;
       await _databaseService.setSetting('media_path', result);
