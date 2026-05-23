@@ -1,4 +1,4 @@
-name: Flutter Multi Build
+name: movie_tv Multi Build
 
 on:
   workflow_dispatch:
