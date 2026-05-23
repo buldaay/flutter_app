@@ -30,17 +30,17 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-        working-directory: my_app
+        working-directory: movie_tv
 
       - name: Build APK
         run: flutter build apk --release
-        working-directory: my_app
+        working-directory: movie_tv
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: my_app/build/app/outputs/flutter-apk/app-release.apk
+          path: movie_tv/build/app/outputs/flutter-apk/app-release.apk
 
   windows-build:
     if: ${{ github.event.inputs.build_target == 'windows' || github.event.inputs.build_target == 'all' }}
@@ -60,14 +60,14 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-        working-directory: my_app
+        working-directory: movie_tv
 
       - name: Build Windows
         run: flutter build windows --release
-        working-directory: my_app
+        working-directory: movie_tv
 
       - name: Upload Windows Build
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: my_app/build/windows/x64/runner/Release/
+          path: movie_tv/build/windows/x64/runner/Release/
