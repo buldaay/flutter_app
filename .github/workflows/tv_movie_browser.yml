@@ -1,0 +1,73 @@
+name: Flutter Multi Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_target:
+        description: "Select build target"
+        required: true
+        default: "apk"
+        type: choice
+        options:
+          - apk
+          - windows
+          - all
+
+jobs:
+
+  android-build:
+    if: ${{ github.event.inputs.build_target == 'apk' || github.event.inputs.build_target == 'all' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: movie_tv
+
+      - name: Build APK
+        run: flutter build apk --release
+        working-directory: movie_tv
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: movie_tv/build/app/outputs/flutter-apk/app-release.apk
+
+  windows-build:
+    if: ${{ github.event.inputs.build_target == 'windows' || github.event.inputs.build_target == 'all' }}
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Enable Windows Desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: movie_tv
+
+      - name: Build Windows
+        run: flutter build windows --release
+        working-directory: movie_tv
+
+      - name: Upload Windows Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: movie_tv/build/windows/x64/runner/Release/
