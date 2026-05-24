@@ -227,9 +227,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _pickFolder() async {
-    // Weydiiso ogolaansho ka hor inta aan la furin File Picker
+      // Weydiiso ogolaansho ka hor inta aan la furin File Picker
     if (await Permission.storage.request().isGranted || await Permission.manageExternalStorage.request().isGranted) {
-      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+      String? selectedDirectory = await FilePicker.getDirectoryPath();
 
       if (selectedDirectory != null) {
         final prefs = await SharedPreferences.getInstance();
