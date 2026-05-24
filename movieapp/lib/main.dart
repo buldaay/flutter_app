@@ -1,121 +1,278 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:android_intent_plus/android_intent.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'movie_model.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Ku qasbi app-ka inuu ahaado Landscape (Jiif) kaliya mar kasta
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+      title: 'TV Movie Browser',
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF121212), // Dark Theme saafi ah
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const HomeScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _HomeScreenState extends State<HomeScreen> {
+  String? _selectedFolderPath;
+  List<MovieCategory> _categories = [];
+  bool _isLoading = false;
 
-  void _incrementCounter() {
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedFolder();
+  }
+
+  // Soo rishada folder-kii hore u kaydsanaa
+  Future<void> _loadSavedFolder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedPath = prefs.getString('movie_folder_path');
+    if (savedPath != null) {
+      setState(() {
+        _selectedFolderPath = savedPath;
+      });
+      _refreshLibrary();
+    }
+  }
+
+  // Baarista feylasha
+  Future<void> _refreshLibrary() async {
+    if (_selectedFolderPath == null) return;
+    setState(() => _isLoading = true);
+    
+    final data = await scanSelectedFolder(_selectedFolderPath!);
+    
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _categories = data;
+      _isLoading = false;
+    });
+  }
+
+  // Ku furista VLC Player
+  Future<void> _playInVLC(String videoPath) async {
+    final intent = AndroidIntent(
+      action: 'action_view',
+      data: 'file://$videoPath',
+      type: 'video/*',
+      package: 'org.videolan.vlc', // Wuxuu si toos ah u raadinayaa VLC App
+    );
+    try {
+      await intent.launch();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fadlan soo dejiso VLC Player marka hore!')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Row(
+        children: [
+          // Navigation Bar-ka Bidix (TV Menu)
+          Container(
+            width: 80,
+            color: const Color(0xFF1E1E1E),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.home, color: Colors.amber),
+                  onPressed: () {},
+                ),
+                const SizedBox(height: 20),
+                IconButton(
+                  icon: const Icon(Icons.settings, color: Colors.white),
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                    );
+                    _loadSavedFolder(); // Dib u soo cusboonaysii marka la soo laabto
+                  },
+                ),
+              ],
+            ),
+          ),
+          
+          // Qaybta Midig (Filimada)
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _selectedFolderPath == null
+                    ? const Center(child: Text('Fadlan tag Settings si aad u dooratid Folder.'))
+                    : _categories.isEmpty
+                        ? const Center(child: Text('Wax filim ah lagama helin folder-ka la doortay.'))
+                        : ListView.builder(
+                            itemCount: _categories.length,
+                            itemBuilder: (context, catIndex) {
+                              final category = _categories[catIndex];
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(12.0),
+                                    child: Text(
+                                      category.name,
+                                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    height: 200,
+                                    child: ListView.builder(
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: category.movies.length,
+                                      itemBuilder: (context, movieIndex) {
+                                        final movie = category.movies[movieIndex];
+                                        return Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                          child: InkWell(
+                                            onTap: () => _playInVLC(movie.videoPath),
+                                            focusColor: Colors.amber.withOpacity(0.4), // Meesha Remote-ka ku jiro (Focus UI)
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Container(
+                                              width: 130,
+                                              decoration: BoxDecoration(
+                                                border: Border.all(color: Colors.grey.shade800),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Column(
+                                                children: [
+                                                  Expanded(
+                                                    child: movie.posterPath != null
+                                                        ? Image.file(File(movie.posterPath!), fit: BoxFit.cover, width: double.infinity)
+                                                        : Container(
+                                                            color: Colors.grey.shade900,
+                                                            child: const Icon(Icons.movie, size: 50, color: Colors.grey),
+                                                          ),
+                                                  ),
+                                                  Padding(
+                                                    padding: const EdgeInsets.all(4.0),
+                                                    child: Text(
+                                                      movie.title,
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                      style: const TextStyle(fontSize: 12),
+                                                    ),
+                                                  )
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                ],
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- SCREEN-KA SETTINGS-KA ---
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  String _currentPath = "Ma jiro folder la doortay";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPath();
+  }
+
+  Future<void> _loadPath() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _currentPath = prefs.getString('movie_folder_path') ?? "Ma jiro folder la doortay";
+    });
+  }
+
+  Future<void> _pickFolder() async {
+    // Weydiiso ogolaansho ka hor inta aan la furin File Picker
+    if (await Permission.storage.request().isGranted || await Permission.manageExternalStorage.request().isGranted) {
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+
+      if (selectedDirectory != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('movie_folder_path', selectedDirectory);
+        setState(() {
+          _currentPath = selectedDirectory;
+        });
+      }
+    }
+  }
+
+  Future<void> _clearLibrary() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('movie_folder_path');
+    setState(() {
+      _currentPath = "Ma jiro folder la doortay";
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      appBar: AppBar(title: const Text('Settings')),
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            Text("Folder-ka hadda dooran: $_currentPath", style: const TextStyle(color: Colors.grey)),
+            const SizedBox(height: 30),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
+              onPressed: _pickFolder,
+              child: const Text('Dooro Main Folder-ka Filimada'),
+            ),
+            const SizedBox(height: 15),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: _clearLibrary,
+              child: const Text('Sifee Library-ga (Clear)'),
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }
